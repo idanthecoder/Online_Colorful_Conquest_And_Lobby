@@ -1,7 +1,5 @@
+# idan_protocol.py
 import socket
-import os
-import pickle
-import sys
 import numpy as np
 
 LENGTH_FIELD_SIZE = 4
@@ -22,18 +20,25 @@ def create_msg(data):
     return reply.encode()
 
 
-def get_msg(my_socket):
+def get_msg(my_socket, time_out=None):
     """
     Extract message from protocol, without the length field
     If length field does not include a number, returns False, "Error"
     """
     # .recv (receive) is getting information from the server
     # .decode is transforming bytes into string (necessary because everything coming out of socket will be bytes)
-    data_length = my_socket.recv(LENGTH_FIELD_SIZE).decode()
-    if data_length.isnumeric():
-        data = my_socket.recv(int(data_length)).decode()
-        return True, data
-    return False, "Error"
+    my_socket.settimeout(time_out)
+    try:
+        data_length = my_socket.recv(LENGTH_FIELD_SIZE).decode()
+        if data_length.isnumeric():
+            data = my_socket.recv(int(data_length)).decode()
+            my_socket.settimeout(None)
+            return True, data
+        my_socket.settimeout(None)
+        return False, "Error"
+    except socket.timeout:
+        my_socket.settimeout(None)
+        return False, "Error"
 
 
 def array_to_string(arr):

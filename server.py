@@ -1,11 +1,9 @@
+# server.py
+
 import socket
 import threading
-import time
-
 import numpy as np
-
 import idan_protocol as idp
-#from game import *
 import random as rnd
 
 # Global variables
@@ -157,6 +155,7 @@ def setup_game():
 
 def handle_games(client1, client2):
     global clients_in_game
+
     client1[1].send(idp.create_msg(f"p_num:{1}"))
     client2[1].send(idp.create_msg(f"p_num:{2}"))
 
@@ -168,17 +167,39 @@ def handle_games(client1, client2):
     turn_of_player = 1
 
     while True:
+        get_data1 = idp.get_msg(client1[1], 0.3)
+        data1 = ""
+        if get_data1[0]:
+            data1 = get_data1[1]
+
+        get_data2 = idp.get_msg(client2[1], 0.3)
+        data2 = ""
+        if get_data2[0]:
+            data2 = get_data2[1]
+
+        if data1 == "forced_quit":
+            client1[1].send(idp.create_msg("disconnected"))
+            client2[1].send(idp.create_msg("other_disconnected"))
+            clients_in_game.remove(client1)
+            clients_in_game.remove(client2)
+            broadcast_clients()
+            break
+
+        if data2 == "forced_quit":
+            client1[1].send(idp.create_msg("other_disconnected"))
+            client2[1].send(idp.create_msg("disconnected"))
+            clients_in_game.remove(client1)
+            clients_in_game.remove(client2)
+            broadcast_clients()
+            break
+
         if turn_of_player == 1:
-            get_data = idp.get_msg(client1[1])
-            data = ""
-            if get_data[0]:
-                data = get_data[1]
-            if not data:
+            if not data1:
                 pass
 
-            elif data.startswith("move"):
+            elif data1.startswith("move"):
                 result = False
-                _, direction = data.split(':')
+                _, direction = data1.split(':')
 
                 if direction.__eq__("LEFT"):
                     result = check_left(arr, 1)
@@ -213,18 +234,13 @@ def handle_games(client1, client2):
                     client1[1].send(idp.create_msg("illegal_move"))
 
         elif turn_of_player == 2:
-            get_data = idp.get_msg(client2[1])
-            data = ""
-            if get_data[0]:
-                data = get_data[1]
-
-            if not data:
+            if not data2:
                 pass
 
-            elif data.startswith("move"):
+            elif data2.startswith("move"):
 
                 result = False
-                _, direction = data.split(':')
+                _, direction = data2.split(':')
 
                 if direction.__eq__("LEFT"):
                     result = check_left(arr, 2)
@@ -261,7 +277,7 @@ def handle_games(client1, client2):
 
 def broadcast_clients():
     global clients
-    #client_names = [client[0] for client in clients]
+
     client_names = []
 
     for client in clients:
@@ -313,7 +329,6 @@ def handle_client(client_conn, addr):
                             pending_requests.append((name, client[1]))  # Add the pending request to the list
                             opponent_conn = client[1]
                             opponent_conn.send(idp.create_msg(f"request:{name}"))
-                            #opponent_conn.send(idp.create_msg(f"Received game request from {name}. Accept?"))
 
                 elif data.startswith("accept"):
                     _, requester = data.split(":")
@@ -336,22 +351,12 @@ def handle_client(client_conn, addr):
                     pending_requests = [req for req in pending_requests if req[1] != client_conn]  # Remove from pending requests
                     broadcast_clients()  # Notify all clients about new matches
 
-                    #arr = np.zeros((ROWS, COLS), dtype=int)
-
-                    #matches.append((arr, save_client1, save_client2))
+                    #matches.append((save_client1, save_client2))
 
                     client_conn.send(idp.create_msg(f"start_game"))
                     opponent_conn.send(idp.create_msg(f"start_game"))
 
                     threading.Thread(target=handle_games, args=(save_client1, save_client2)).start()
-
-                #elif data == "finished_game":
-                #    for client in clients_in_game:
-                #        if client[1] == client_conn:
-                #            client_playing = False
-                #            clients_in_game.remove(client)
-                #            break
-                #    broadcast_clients()
 
     except ConnectionResetError:
         # it will reach here when can't reach data, therefore the server realizes the client left and removed him from the lobby

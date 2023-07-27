@@ -1,3 +1,5 @@
+# client.py
+
 import socket
 import threading
 #import tkinter as tk
@@ -20,7 +22,9 @@ BLUE = (0, 0, 255)
 DARK_BLUE = (0, 0, 139)
 DARK_RED = (139, 0, 0)
 DARK_GRAY = (169, 169, 169)
-LIGHT_GRAY = (211,211,211)
+LIGHT_GRAY = (211, 211, 211)
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
 
 
 def write_to_screen(text, font_size, x_pos, y_pos, color):
@@ -35,7 +39,7 @@ def write_to_screen(text, font_size, x_pos, y_pos, color):
     text_surface = font.render(text, True, color)
 
     # Clear the screen
-    win.fill((0, 0, 0))
+    win.fill(BLACK)
 
     # Draw the text on the screen
     win.blit(text_surface, (x_pos, y_pos))
@@ -68,11 +72,6 @@ def recv_game_information():
         elif data == "illegal_move":
             already_clicked = False
 
-        #elif data.startswith("update_arr"):
-        #    _, str_arr = data.split(':')
-        #    arr = idp.string_to_array(str_arr)
-        #    draw_screen(arr)
-
         elif data.startswith("victory"):
             _, victor = data.split(':')
             if victor == name:
@@ -91,14 +90,22 @@ def recv_game_information():
             time.sleep(2)
             game_ended = True
             break
-        #elif data == "disconnected":
-        #    break
+        elif data == "disconnected":
+            game_ended = True
+            break
+        elif data == "other_disconnected":
+            write_to_screen(f"Opponent disconnected", 50, GRID_WIDTH // 4, GRID_HEIGHT // 2, WHITE)
+            time.sleep(2)
+            game_ended = True
+            break
+            client_socket.settimeout(0.3)
 
 
 def draw_screen(arr):
     global win
-    win.fill((255, 255, 255))
+    win.fill(WHITE)
 
+    # fill in the colors
     for r in range(ROWS):
         for c in range(COLS):
             if arr[r, c] == 1:
@@ -110,10 +117,11 @@ def draw_screen(arr):
             elif arr[r, c] == 4:
                 color = DARK_BLUE
             else:
-                color = (0, 0, 0)
+                color = BLACK
 
             pygame.draw.rect(win, color, (c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE))
 
+    # generate a grid
     for r in range(0, GRID_WIDTH, CELL_SIZE):
         for c in range(0, GRID_HEIGHT, CELL_SIZE):
             rectangle = pygame.Rect(r, c, CELL_SIZE, CELL_SIZE)
@@ -127,38 +135,38 @@ def handle_game():
 
     pygame.init()
     win = pygame.display.set_mode((GRID_WIDTH, GRID_HEIGHT))
-    pygame.display.set_caption("Game")
+    pygame.display.set_caption("Colorful Conquest")
 
     threading.Thread(target=recv_game_information).start()
 
-    #stop_loop = False
+    get_key_input = True
     while True:
         if game_ended:
             pygame.quit()
             break
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                #client_socket.send(idp.create_msg("forced_quit"))
-                pygame.quit()
-                #stop_loop = True
-                break
+        if get_key_input:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    client_socket.send(idp.create_msg("forced_quit"))
+                    pygame.quit()
+                    get_key_input = False
+                    break
 
-            #if not already_clicked:
-            if clients_turn and event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_LEFT:
-                    client_socket.send(idp.create_msg(f"move:LEFT"))
-                    #already_clicked = True
-                elif event.key == pygame.K_RIGHT:
-                    client_socket.send(idp.create_msg(f"move:RIGHT"))
-                    #already_clicked = True
-                elif event.key == pygame.K_UP:
-                    client_socket.send(idp.create_msg(f"move:UP"))
-                    #already_clicked = True
-                elif event.key == pygame.K_DOWN:
-                    client_socket.send(idp.create_msg(f"move:DOWN"))
-                    #already_clicked = True
-        #if stop_loop:
-        #    break
+                #if not already_clicked:
+
+                if get_key_input and clients_turn and event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_LEFT:
+                        client_socket.send(idp.create_msg(f"move:LEFT"))
+                        #already_clicked = True
+                    elif event.key == pygame.K_RIGHT:
+                        client_socket.send(idp.create_msg(f"move:RIGHT"))
+                        #already_clicked = True
+                    elif event.key == pygame.K_UP:
+                        client_socket.send(idp.create_msg(f"move:UP"))
+                        #already_clicked = True
+                    elif event.key == pygame.K_DOWN:
+                        client_socket.send(idp.create_msg(f"move:DOWN"))
+                        #already_clicked = True
 
 
 def send_request():
@@ -172,10 +180,6 @@ def send_request():
 
 
 def on_closing():
-    #global this_client_matches
-
-    #for match in this_client_matches:
-    #    match.send(idp.create_msg("exit"))  # Notify the server about ending the game
 
     # i don't think this is necessary
     #client_socket.send(idp.create_msg("exit"))
@@ -233,11 +237,10 @@ def start_client():
                 game_ended = False
 
                 handle_game()
-                print("game done do deiconify")
+
+
                 # get back to the lobby
                 root.deiconify()
-
-                #client_socket.send(idp.create_msg("finished_game"))
 
     except ConnectionRefusedError:
         messagebox.showinfo("Server Error", "Server is not running.")
@@ -273,7 +276,6 @@ if __name__ == "__main__":
     clients_turn = False
     already_clicked = False
     game_ended = False
-    this_client_matches = set()
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect(('localhost', 12345))
 
