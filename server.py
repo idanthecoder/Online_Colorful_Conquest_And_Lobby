@@ -10,7 +10,6 @@ import random as rnd
 clients = []
 clients_in_game = []
 pending_requests = []
-matches = []
 
 # Constants
 ROWS = 15
@@ -20,6 +19,22 @@ GRID_WIDTH = COLS * CELL_SIZE
 GRID_HEIGHT = ROWS * CELL_SIZE
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
+
+
+def notify_winner(arr, num, client1, client2):
+    if check_death(arr, num):
+        if num == 1:
+            client1[1].send(idp.create_msg(f"victory:{client2[0]}"))
+            client2[1].send(idp.create_msg(f"victory:{client2[0]}"))
+        elif num == 2:
+            client1[1].send(idp.create_msg(f"victory:{client1[0]}"))
+            client2[1].send(idp.create_msg(f"victory:{client1[0]}"))
+
+        clients_in_game.remove(client1)
+        clients_in_game.remove(client2)
+        broadcast_clients()
+        return True
+    return False
 
 
 def check_death(arr, num):
@@ -38,14 +53,15 @@ def check_death(arr, num):
             (head_r + 1 >= ROWS or arr[head_r + 1, head_c] != 0)):
         return True
 
-    count_1 = 0
-    count_2 = 0
+    # starting with 1 as both necessarily have one head block
+    count_1 = 1
+    count_2 = 1
 
     for r in range(ROWS):
         for c in range(COLS):
-            if arr[r, c] == 1 or arr[r, c] == 3:
+            if arr[r, c] == 1:
                 count_1 += 1
-            elif arr[r, c] == 2 or arr[r, c] == 4:
+            elif arr[r, c] == 2:
                 count_2 += 1
 
     if num == 1 and (count_2 > (ROWS * COLS) // 2):
@@ -194,10 +210,10 @@ def handle_games(client1, client2):
             break
 
         if turn_of_player == 1:
-            if not data1:
-                pass
+            if notify_winner(arr, 1, client1, client2):
+                break
 
-            elif data1.startswith("move"):
+            if data1.startswith("move"):
                 result = False
                 _, direction = data1.split(':')
 
@@ -209,8 +225,6 @@ def handle_games(client1, client2):
                     result = check_up(arr, 1)
                 elif direction.__eq__("DOWN"):
                     result = check_down(arr, 1)
-                else:
-                    pass
 
                 if result:
                     client1[1].send(idp.create_msg("turn_done"))
@@ -218,26 +232,20 @@ def handle_games(client1, client2):
                     client1[1].send(idp.create_msg(f"update_arr:{idp.array_to_string(arr)}"))
                     client2[1].send(idp.create_msg(f"update_arr:{idp.array_to_string(arr)}"))
 
-                    if check_death(arr, 1):
-                        client1[1].send(idp.create_msg(f"victory:{client2[0]}"))
-                        client2[1].send(idp.create_msg(f"victory:{client2[0]}"))
-
-                        clients_in_game.remove(client1)
-                        clients_in_game.remove(client2)
-                        broadcast_clients()
+                    if notify_winner(arr, 1, client1, client2):
                         break
-                    else:
-                        turn_of_player = 2
-                        client2[1].send(idp.create_msg(f"do_turn"))
+
+                    turn_of_player = 2
+                    client2[1].send(idp.create_msg(f"do_turn"))
 
                 else:
                     client1[1].send(idp.create_msg("illegal_move"))
 
         elif turn_of_player == 2:
-            if not data2:
-                pass
+            if notify_winner(arr, 2, client1, client2):
+                break
 
-            elif data2.startswith("move"):
+            if data2.startswith("move"):
 
                 result = False
                 _, direction = data2.split(':')
@@ -250,8 +258,6 @@ def handle_games(client1, client2):
                     result = check_up(arr, 2)
                 elif direction.__eq__("DOWN"):
                     result = check_down(arr, 2)
-                else:
-                    pass
 
                 if result:
                     client2[1].send(idp.create_msg("turn_done"))
@@ -259,17 +265,11 @@ def handle_games(client1, client2):
                     client1[1].send(idp.create_msg(f"update_arr:{idp.array_to_string(arr)}"))
                     client2[1].send(idp.create_msg(f"update_arr:{idp.array_to_string(arr)}"))
 
-                    if check_death(arr, 2):
-                        client1[1].send(idp.create_msg(f"victory:{client1[0]}"))
-                        client2[1].send(idp.create_msg(f"victory:{client1[0]}"))
-
-                        clients_in_game.remove(client1)
-                        clients_in_game.remove(client2)
-                        broadcast_clients()
+                    if notify_winner(arr, 2, client1, client2):
                         break
-                    else:
-                        turn_of_player = 1
-                        client1[1].send(idp.create_msg(f"do_turn"))
+
+                    turn_of_player = 1
+                    client1[1].send(idp.create_msg(f"do_turn"))
 
                 else:
                     client2[1].send(idp.create_msg("illegal_move"))
@@ -290,7 +290,7 @@ def broadcast_clients():
 
 
 def handle_client(client_conn, addr):
-    global clients, pending_requests, clients_in_game, matches
+    global clients, pending_requests, clients_in_game
 
     name = ""
     get_name = idp.get_msg(client_conn)
@@ -300,7 +300,6 @@ def handle_client(client_conn, addr):
     print(f"New connection: {name} ({addr[0]}:{addr[1]})")
     broadcast_clients()  # Notify all clients about new connection
 
-    #client_playing = False
     try:
         while True:
             client_playing = False
@@ -317,7 +316,6 @@ def handle_client(client_conn, addr):
                 if not data:
                     print(f"{name} disconnected.")
                     clients.remove((name, client_conn))
-                    # maybe clients in game . remove ??
                     pending_requests = [req for req in pending_requests if req[0] != name]  # Remove from pending requests
                     broadcast_clients()  # Notify all clients about disconnection
                     break
@@ -348,10 +346,14 @@ def handle_client(client_conn, addr):
                             save_client2 = client
                             break
 
+                    if opponent_conn is None:
+                        clients_in_game.remove(save_client1)
+                        if None in clients_in_game:
+                            clients_in_game.remove(None)
+                        continue
+
                     pending_requests = [req for req in pending_requests if req[1] != client_conn]  # Remove from pending requests
                     broadcast_clients()  # Notify all clients about new matches
-
-                    #matches.append((save_client1, save_client2))
 
                     client_conn.send(idp.create_msg(f"start_game"))
                     opponent_conn.send(idp.create_msg(f"start_game"))
@@ -359,15 +361,17 @@ def handle_client(client_conn, addr):
                     threading.Thread(target=handle_games, args=(save_client1, save_client2)).start()
 
     except ConnectionResetError:
-        # it will reach here when can't reach data, therefore the server realizes the client left and removed him from the lobby
+        # it will reach here when can't reach data, therefore the server realizes the client left
+        # and remove him from the lobby
         print(f"{name} forcibly disconnected.")
         clients.remove((name, client_conn))
-        # ??? clients_in_game.remove((name, client_conn))  # Remove from matches if present
         pending_requests = [req for req in pending_requests if req[0] != name]  # Remove from pending requests
         broadcast_clients()  # Notify all clients about disconnection
 
 
 def start_server():
+    # set up the server socket, listen(5) as 5 is a reasonable value for the
+    # unaccepted connections that the system will allow before refusing new connections.
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(('localhost', 12345))
     server.listen(5)

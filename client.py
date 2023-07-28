@@ -2,13 +2,11 @@
 
 import socket
 import threading
-#import tkinter as tk
 import time
 from tkinter import messagebox, Listbox, END, SINGLE, simpledialog
 from tkinter import *
 import idan_protocol as idp
 from functools import partial
-#from game import *
 import pygame
 
 # Constants
@@ -65,10 +63,8 @@ def recv_game_information():
             draw_screen(arr)
         elif data == "do_turn":
             clients_turn = True
-            #already_clicked = False
         elif data == "turn_done":
             clients_turn = False
-            #already_clicked = False
         elif data == "illegal_move":
             already_clicked = False
 
@@ -85,8 +81,6 @@ def recv_game_information():
                 elif p_num == 2:
                     write_to_screen(f"{victor} won the game!!", 50, GRID_WIDTH // 4, GRID_HEIGHT // 2, RED)
 
-            #print(f"{victor} won the game!!")
-
             time.sleep(2)
             game_ended = True
             break
@@ -98,7 +92,6 @@ def recv_game_information():
             time.sleep(2)
             game_ended = True
             break
-            client_socket.settimeout(0.3)
 
 
 def draw_screen(arr):
@@ -136,6 +129,7 @@ def handle_game():
     pygame.init()
     win = pygame.display.set_mode((GRID_WIDTH, GRID_HEIGHT))
     pygame.display.set_caption("Colorful Conquest")
+    play("assets/Resolute Hub.mp3")
 
     threading.Thread(target=recv_game_information).start()
 
@@ -152,21 +146,15 @@ def handle_game():
                     get_key_input = False
                     break
 
-                #if not already_clicked:
-
                 if get_key_input and clients_turn and event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_LEFT:
                         client_socket.send(idp.create_msg(f"move:LEFT"))
-                        #already_clicked = True
                     elif event.key == pygame.K_RIGHT:
                         client_socket.send(idp.create_msg(f"move:RIGHT"))
-                        #already_clicked = True
                     elif event.key == pygame.K_UP:
                         client_socket.send(idp.create_msg(f"move:UP"))
-                        #already_clicked = True
                     elif event.key == pygame.K_DOWN:
                         client_socket.send(idp.create_msg(f"move:DOWN"))
-                        #already_clicked = True
 
 
 def send_request():
@@ -180,10 +168,6 @@ def send_request():
 
 
 def on_closing():
-
-    # i don't think this is necessary
-    #client_socket.send(idp.create_msg("exit"))
-
     # close the window
     root.destroy()
 
@@ -204,9 +188,6 @@ def update_user_list(clients_response):
 def start_client():
     global opponent, game_ended
     try:
-        #client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        #client_socket.connect(('localhost', 12345))
-
         client_socket.send(idp.create_msg(name))  # Send the name to the server
 
         while True:
@@ -238,7 +219,6 @@ def start_client():
 
                 handle_game()
 
-
                 # get back to the lobby
                 root.deiconify()
 
@@ -247,7 +227,7 @@ def start_client():
 
 
 def setup_music():
-    music_func = partial(play, )
+    music_func = partial(play, "assets/Lounge Lizard.mp3")
     play_button = Button(root, text="Play some music!", font=("Helvetica", 20), command=music_func)
     play_button.pack(pady=10)
 
@@ -256,10 +236,13 @@ def setup_music():
     stop_button.pack(pady=10)
 
 
-def play():
+def play(directory):
     pygame.mixer.init()
-    pygame.mixer.music.load("assets/lounge lizard pvz.mp3")
-    pygame.mixer.music.play(loops=-1)  # will loop indefinitely
+    try:
+        pygame.mixer.music.load(directory)
+        pygame.mixer.music.play(loops=-1)  # will loop indefinitely
+    except pygame.error:
+        pass
 
 
 def stop_music():
@@ -276,8 +259,6 @@ if __name__ == "__main__":
     clients_turn = False
     already_clicked = False
     game_ended = False
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect(('localhost', 12345))
 
     root = Tk()
     width = 800
@@ -290,7 +271,15 @@ if __name__ == "__main__":
                   font=("times new roman", 40, "bold"), bg="white", fg="green")
     title.pack(side=TOP, fill=X)
 
-    name = simpledialog.askstring("Username", "Enter your name:")
+    name = None
+    while name is None or name == "" or ':' in name or ',' in name:
+        name = simpledialog.askstring("Username", "Enter your name:")
+        if name is None:
+            root.destroy()  # Close the window if the user clicks Cancel
+            exit(0)
+
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_socket.connect(('localhost', 12345))
 
     # Create the listbox to display connected users
     user_listbox = Listbox(root, selectmode=SINGLE)

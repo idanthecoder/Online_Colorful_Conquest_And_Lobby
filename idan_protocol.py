@@ -32,12 +32,9 @@ def get_msg(my_socket, time_out=None):
         data_length = my_socket.recv(LENGTH_FIELD_SIZE).decode()
         if data_length.isnumeric():
             data = my_socket.recv(int(data_length)).decode()
-            my_socket.settimeout(None)
             return True, data
-        my_socket.settimeout(None)
         return False, "Error"
     except socket.timeout:
-        my_socket.settimeout(None)
         return False, "Error"
 
 
