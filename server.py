@@ -9,7 +9,6 @@ import random as rnd
 # Global variables
 clients = []
 clients_in_game = []
-pending_requests = []
 
 # Constants
 ROWS = 15
@@ -22,6 +21,12 @@ BLUE = (0, 0, 255)
 
 
 def notify_winner(arr, num, client1, client2):
+    """
+    Process: Notify clients of the winner if a winner was found
+    :parameter: arr (numpy array), num (player's number), client1, client2
+    :return: If a winner was found and successfully notified clients of the winner, Return true. Otherwise False
+    """
+
     if check_death(arr, num):
         if num == 1:
             client1[1].send(idp.create_msg(f"victory:{client2[0]}"))
@@ -38,6 +43,11 @@ def notify_winner(arr, num, client1, client2):
 
 
 def check_death(arr, num):
+    """
+    Process: check if player lost by getting blocked or other player winning over half of the blocks
+    :parameter: arr (numpy array), num (player's number)
+    :return: True if player can move right, otherwise False
+    """
     head_num = num + 2
     head_r, head_c = -1, -1
 
@@ -47,6 +57,7 @@ def check_death(arr, num):
                 head_r, head_c = r, c
                 break
 
+    # check if the head is blocked from all sides
     if ((head_c - 1 < 0 or arr[head_r, head_c - 1] != 0) and
             (head_c + 1 >= COLS or arr[head_r, head_c + 1] != 0) and
             (head_r - 1 < 0 or arr[head_r - 1, head_c] != 0) and
@@ -57,6 +68,7 @@ def check_death(arr, num):
     count_1 = 1
     count_2 = 1
 
+    # check how many blocks each player controls
     for r in range(ROWS):
         for c in range(COLS):
             if arr[r, c] == 1:
@@ -73,6 +85,12 @@ def check_death(arr, num):
 
 
 def check_left(arr, num):
+    """
+    Process: If possible move left and return True to show a successful operation
+    :parameter: arr (numpy array), num (player's number)
+    :return: True if player can move left, otherwise False
+    """
+
     # the head is recognized as the number of the player + 2
     head_num = num + 2
     head_r, head_c = -1, -1
@@ -93,6 +111,12 @@ def check_left(arr, num):
 
 
 def check_right(arr, num):
+    """
+    Process: If possible move right and return True to show a successful operation
+    :parameter: arr (numpy array), num (player's number)
+    :return: True if player can move right, otherwise False
+    """
+
     # the head is recognized as the number of the player + 2
     head_num = num + 2
     head_r, head_c = -1, -1
@@ -113,6 +137,12 @@ def check_right(arr, num):
 
 
 def check_up(arr, num):
+    """
+    Process: If possible move up and return True to show a successful operation
+    :parameter: arr (numpy array), num (player's number)
+    :return: True if player can move up, otherwise False
+    """
+
     # the head is recognized as the number of the player + 2
     head_num = num + 2
     head_r, head_c = -1, -1
@@ -133,6 +163,12 @@ def check_up(arr, num):
 
 
 def check_down(arr, num):
+    """
+    Process: If possible move down and return True to show a successful operation
+    :parameter: arr (numpy array), num (player's number)
+    :return: True if player can move down, otherwise False
+    """
+
     # the head is recognized as the number of the player + 2
     head_num = num + 2
     head_r, head_c = -1, -1
@@ -153,6 +189,12 @@ def check_down(arr, num):
 
 
 def setup_game():
+    """
+    Process: Create a numpy array of zeros and then add 3 and 4 as the heads of the players in random positions
+    :parameter: Nothing
+    :return: arr (numpy arr)
+    """
+
     # create the array
     arr = np.zeros((ROWS, COLS), dtype=int)
 
@@ -170,8 +212,15 @@ def setup_game():
 
 
 def handle_games(client1, client2):
+    """
+    Process: Send the updated client names to all clients
+    :parameter: client1, client2 (sockets)
+    :return: Nothing
+    """
+
     global clients_in_game
 
+    # send the players numbers, set up the initial board and start with player1's turn
     client1[1].send(idp.create_msg(f"p_num:{1}"))
     client2[1].send(idp.create_msg(f"p_num:{2}"))
 
@@ -183,6 +232,7 @@ def handle_games(client1, client2):
     turn_of_player = 1
 
     while True:
+        # receive information from both clients, mostly the moves but also detect if a client has disconnected mid-game
         get_data1 = idp.get_msg(client1[1], 0.3)
         data1 = ""
         if get_data1[0]:
@@ -193,6 +243,7 @@ def handle_games(client1, client2):
         if get_data2[0]:
             data2 = get_data2[1]
 
+        # if one client decided to disconnect mid-game notify the other and close the game for both
         if data1 == "forced_quit":
             client1[1].send(idp.create_msg("disconnected"))
             client2[1].send(idp.create_msg("other_disconnected"))
@@ -209,10 +260,13 @@ def handle_games(client1, client2):
             broadcast_clients()
             break
 
+        # handle the data for the turn of player 1 or 2 depending on whose turn is it
         if turn_of_player == 1:
+            # check if client was blocked in the other player's turn
             if notify_winner(arr, 1, client1, client2):
                 break
 
+            # if the move is valid update the game array and start the other player's turn
             if data1.startswith("move"):
                 result = False
                 _, direction = data1.split(':')
@@ -232,19 +286,19 @@ def handle_games(client1, client2):
                     client1[1].send(idp.create_msg(f"update_arr:{idp.array_to_string(arr)}"))
                     client2[1].send(idp.create_msg(f"update_arr:{idp.array_to_string(arr)}"))
 
+                    # check if blocked himself during his turn
                     if notify_winner(arr, 1, client1, client2):
                         break
 
                     turn_of_player = 2
                     client2[1].send(idp.create_msg(f"do_turn"))
 
-                else:
-                    client1[1].send(idp.create_msg("illegal_move"))
-
         elif turn_of_player == 2:
+            # check if client was blocked in the other player's turn
             if notify_winner(arr, 2, client1, client2):
                 break
 
+            # if the move is valid update the game array and start the other player's turn
             if data2.startswith("move"):
 
                 result = False
@@ -265,17 +319,21 @@ def handle_games(client1, client2):
                     client1[1].send(idp.create_msg(f"update_arr:{idp.array_to_string(arr)}"))
                     client2[1].send(idp.create_msg(f"update_arr:{idp.array_to_string(arr)}"))
 
+                    # check if blocked himself during his turn
                     if notify_winner(arr, 2, client1, client2):
                         break
 
                     turn_of_player = 1
                     client1[1].send(idp.create_msg(f"do_turn"))
 
-                else:
-                    client2[1].send(idp.create_msg("illegal_move"))
-
 
 def broadcast_clients():
+    """
+    Process: Send the updated client names to all clients
+    :parameter: Nothing
+    :return: Nothing
+    """
+
     global clients
 
     client_names = []
@@ -290,8 +348,15 @@ def broadcast_clients():
 
 
 def handle_client(client_conn, addr):
-    global clients, pending_requests, clients_in_game
+    """
+    Process: Initialize the server and accept new client connections
+    :parameter: Client_conn, addr
+    :return: Nothing
+    """
 
+    global clients, clients_in_game
+
+    # get client's name and show it to connected clients
     name = ""
     get_name = idp.get_msg(client_conn)
     if get_name[0]:
@@ -302,32 +367,35 @@ def handle_client(client_conn, addr):
 
     try:
         while True:
+            # check if client in game
             client_playing = False
             for client in clients_in_game:
                 if client[1] == client_conn:
                     client_playing = True
 
+            # handle lobby matters
             if not client_playing:
                 get_data = idp.get_msg(client_conn)
                 data = ""
                 if get_data[0]:
                     data = get_data[1]
 
+                # if there is no data assume the client has disconnected
                 if not data:
                     print(f"{name} disconnected.")
                     clients.remove((name, client_conn))
-                    pending_requests = [req for req in pending_requests if req[0] != name]  # Remove from pending requests
                     broadcast_clients()  # Notify all clients about disconnection
                     break
 
+                # send game request
                 elif data.startswith("request"):
                     _, opponent = data.split(":")
                     for client in clients:
                         if client[0] == opponent:
-                            pending_requests.append((name, client[1]))  # Add the pending request to the list
                             opponent_conn = client[1]
                             opponent_conn.send(idp.create_msg(f"request:{name}"))
 
+                # if game accepted add the 2 client into a game together
                 elif data.startswith("accept"):
                     _, requester = data.split(":")
                     save_client1 = None
@@ -346,15 +414,17 @@ def handle_client(client_conn, addr):
                             save_client2 = client
                             break
 
+                    # check if the client who requested the game exited the lobby before the other client accepted
+                    # the request, if so then don't enter a game
                     if opponent_conn is None:
                         clients_in_game.remove(save_client1)
                         if None in clients_in_game:
                             clients_in_game.remove(None)
                         continue
 
-                    pending_requests = [req for req in pending_requests if req[1] != client_conn]  # Remove from pending requests
                     broadcast_clients()  # Notify all clients about new matches
 
+                    # notify client of the game's beginning and start the game thread
                     client_conn.send(idp.create_msg(f"start_game"))
                     opponent_conn.send(idp.create_msg(f"start_game"))
 
@@ -365,11 +435,16 @@ def handle_client(client_conn, addr):
         # and remove him from the lobby
         print(f"{name} forcibly disconnected.")
         clients.remove((name, client_conn))
-        pending_requests = [req for req in pending_requests if req[0] != name]  # Remove from pending requests
         broadcast_clients()  # Notify all clients about disconnection
 
 
 def start_server():
+    """
+    Process: Initialize the server and accept new client connections
+    :parameter: Nothing
+    :return: Nothing
+    """
+
     # set up the server socket, listen(5) as 5 is a reasonable value for the
     # unaccepted connections that the system will allow before refusing new connections.
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -378,6 +453,7 @@ def start_server():
 
     print("Server started. Waiting for connections...")
 
+    # as long as the server is up accept all connections and communicate with each client using a thread
     while True:
         conn, addr = server.accept()
         threading.Thread(target=handle_client, args=(conn, addr)).start()

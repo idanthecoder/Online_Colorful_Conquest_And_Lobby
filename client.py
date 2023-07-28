@@ -26,6 +26,11 @@ BLACK = (0, 0, 0)
 
 
 def write_to_screen(text, font_size, x_pos, y_pos, color):
+    """
+    Process: Print a message on the pygame screen
+    :parameter: text (string), font_size (int), x_pos (int), y_pos (int), color (tup[int])
+    :return: Nothing
+    """
 
     # Set up the screen dimensions
     screen_width, screen_height = 800, 600
@@ -36,37 +41,40 @@ def write_to_screen(text, font_size, x_pos, y_pos, color):
     # Render the text on a surface
     text_surface = font.render(text, True, color)
 
-    # Clear the screen
+    # Clear the screen and draw the text
     win.fill(BLACK)
-
-    # Draw the text on the screen
     win.blit(text_surface, (x_pos, y_pos))
 
-    # Update the display
     pygame.display.flip()
 
 
 def recv_game_information():
-    global p_num, clients_turn, already_clicked, game_ended
+    """
+    Process: Receive game updates from the server and update the game state accordingly
+    :parameter: Nothing
+    :return: Nothing
+    """
+
+    global p_num, clients_turn, game_ended
     while True:
         get_data = idp.get_msg(client_socket)
         data = ""
         if get_data[0]:
             data = get_data[1]
 
+        # receive data that will dictate screen update, if it's the client's turn and notify about the game's state
         if data.startswith("p_num"):
             _, num = data.split(':')
             p_num = int(num)
         elif data.startswith("update_arr"):
             _, str_arr = data.split(':')
+            # use my protocol to get a numpy arr from string sent
             arr = idp.string_to_array(str_arr)
             draw_screen(arr)
         elif data == "do_turn":
             clients_turn = True
         elif data == "turn_done":
             clients_turn = False
-        elif data == "illegal_move":
-            already_clicked = False
 
         elif data.startswith("victory"):
             _, victor = data.split(':')
@@ -95,7 +103,14 @@ def recv_game_information():
 
 
 def draw_screen(arr):
+    """
+    Process: Display the game board to the player
+    :parameter: Arr of type numpy array
+    :return: Nothing
+    """
+
     global win
+    # clear the screen
     win.fill(WHITE)
 
     # fill in the colors
@@ -124,13 +139,20 @@ def draw_screen(arr):
 
 
 def handle_game():
-    global p_num, win, clients_turn, already_clicked, game_ended
+    """
+    Process: Send player's moves to the server so that he may update the game accordingly
+    :parameter: Nothing
+    :return: Nothing
+    """
+
+    global p_num, win, clients_turn, game_ended
 
     pygame.init()
     win = pygame.display.set_mode((GRID_WIDTH, GRID_HEIGHT))
     pygame.display.set_caption("Colorful Conquest")
     play("assets/Resolute Hub.mp3")
 
+    # start a thread that will receive game information from the server simultaneously to sending the player's moves
     threading.Thread(target=recv_game_information).start()
 
     get_key_input = True
@@ -141,11 +163,13 @@ def handle_game():
         if get_key_input:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
+                    # notify the server about the client's decision to exit mid-game
                     client_socket.send(idp.create_msg("forced_quit"))
                     pygame.quit()
                     get_key_input = False
                     break
 
+                # receive data from the keyboard buffer and send it to the server if it's the player's turn
                 if get_key_input and clients_turn and event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_LEFT:
                         client_socket.send(idp.create_msg(f"move:LEFT"))
@@ -158,6 +182,11 @@ def handle_game():
 
 
 def send_request():
+    """
+    Process: Send the game request to the server so that he may transfer it to the other client
+    :parameter: Nothing
+    :return: Nothing
+    """
     opponent = user_listbox.get(user_listbox.curselection())
     try:
         client_socket.send(idp.create_msg(name))  # Send the name to the server
@@ -168,6 +197,11 @@ def send_request():
 
 
 def on_closing():
+    """
+    Process: Terminate every ongoing activity
+    :parameter: Nothing
+    :return: Nothing
+    """
     # close the window
     root.destroy()
 
@@ -178,6 +212,11 @@ def on_closing():
 
 
 def update_user_list(clients_response):
+    """
+    Process: Updates the clients list shown to the client
+    :parameter: Clients_response (the server's message)
+    :return: Nothing
+    """
     clients_list = clients_response.split(":")[1]
     user_listbox.delete(0, END)
     for client in clients_list.split(","):
@@ -186,40 +225,43 @@ def update_user_list(clients_response):
 
 
 def start_client():
+    """
+    Process: The main lobby's function. Takes care of receiving data from the server and acting accordingly
+    :parameter: Nothing
+    :return: Nothing
+    """
     global opponent, game_ended
     try:
         client_socket.send(idp.create_msg(name))  # Send the name to the server
 
         while True:
-
+            # constantly receive data from the server using my protocol
             get_data = idp.get_msg(client_socket)
             data = ""
             if get_data[0]:
                 data = get_data[1]
 
+            # check for certain datas and respond accordingly
             if data.startswith("clients:"):
                 update_user_list(data)
-            elif data == "accept":
-                messagebox.showinfo("Game Request", f"Game request accepted by {opponent}")
-            elif data == "unavailable":
-                messagebox.showinfo("Game Request", "Opponent is currently in a game.")
             elif data.startswith("request"):
                 _, requester = data.split(":")
                 if requester != name:
                     opponent = requester  # Store the requester's name for the current request
                     response = messagebox.askquestion("Game Request", f"Received game request from {requester}. Accept?")
                     if response == 'yes':
-                        client_socket.send(idp.create_msg(f"accept:{opponent}"))  # Send the "accept" response to the server
+                        # Send the "accept" response to the server with the client's opponent
+                        client_socket.send(idp.create_msg(f"accept:{opponent}"))
             elif data == "start_game":
+                # halt everything tkinter (lobby) wise
                 stop_music()
-
                 root.withdraw()
-
                 game_ended = False
 
+                # call the function that will handle the game between the 2 clients
                 handle_game()
 
-                # get back to the lobby
+                # get back to the lobby after the game has ended
                 root.deiconify()
 
     except ConnectionRefusedError:
@@ -227,6 +269,12 @@ def start_client():
 
 
 def setup_music():
+    """
+    Process: Creates 2 button play and stop that will take care of the lobby's music
+    :parameter: Nothing
+    :return: Nothing
+    """
+    # use partial functions to set up the music buttons
     music_func = partial(play, "assets/Lounge Lizard.mp3")
     play_button = Button(root, text="Play some music!", font=("Helvetica", 20), command=music_func)
     play_button.pack(pady=10)
@@ -237,6 +285,11 @@ def setup_music():
 
 
 def play(directory):
+    """
+    Process: Initializes mixer and plays the audio in the directory
+    :parameter: Directory of audio file
+    :return: Nothing
+    """
     pygame.mixer.init()
     try:
         pygame.mixer.music.load(directory)
@@ -246,6 +299,11 @@ def play(directory):
 
 
 def stop_music():
+    """
+    Process: Stops mixer if initialized
+    :parameter: Nothing
+    :return: Nothing
+    """
     try:
         pygame.mixer.music.stop()
     except pygame.error:
@@ -257,7 +315,6 @@ if __name__ == "__main__":
     p_num = 0
     win = None
     clients_turn = False
-    already_clicked = False
     game_ended = False
 
     root = Tk()
@@ -271,6 +328,7 @@ if __name__ == "__main__":
                   font=("times new roman", 40, "bold"), bg="white", fg="green")
     title.pack(side=TOP, fill=X)
 
+    # get valid name from user
     name = None
     while name is None or name == "" or ':' in name or ',' in name:
         name = simpledialog.askstring("Username", "Enter your name:")
@@ -278,6 +336,7 @@ if __name__ == "__main__":
             root.destroy()  # Close the window if the user clicks Cancel
             exit(0)
 
+    # connect to the server
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect(('localhost', 12345))
 
@@ -289,8 +348,14 @@ if __name__ == "__main__":
     send_button = Button(root, text="Send Request", command=send_request)
     send_button.pack()
 
+    # set up music buttons using tkinter and pygame's mixer
     setup_music()
 
+    title = Label(root, text="Made by Idan Barkin", bd=9, relief=GROOVE,
+                  font=("times new roman", 30, "bold"), bg="white", fg="green")
+    title.pack()
+
+    # start client thread, that will run simultaneously with the tkinter mainloop
     threading.Thread(target=start_client).start()
 
     root.mainloop()
