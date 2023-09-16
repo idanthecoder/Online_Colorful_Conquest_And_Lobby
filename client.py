@@ -23,6 +23,8 @@ DARK_GRAY = (169, 169, 169)
 LIGHT_GRAY = (211, 211, 211)
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 600
 
 
 def write_to_screen(text, font_size, x_pos, y_pos, color):
@@ -31,9 +33,6 @@ def write_to_screen(text, font_size, x_pos, y_pos, color):
     :parameter: text (string), font_size (int), x_pos (int), y_pos (int), color (tup[int])
     :return: Nothing
     """
-
-    # Set up the screen dimensions
-    screen_width, screen_height = 800, 600
 
     # Set up the font and size
     font = pygame.font.Font(None, font_size)
@@ -150,7 +149,7 @@ def handle_game():
     pygame.init()
     win = pygame.display.set_mode((GRID_WIDTH, GRID_HEIGHT))
     pygame.display.set_caption("Colorful Conquest")
-    play("assets/Resolute Hub.mp3")
+    play("assets/hornet.mp3")
 
     # start a thread that will receive game information from the server simultaneously to sending the player's moves
     threading.Thread(target=recv_game_information).start()
@@ -170,7 +169,9 @@ def handle_game():
                     break
 
                 # receive data from the keyboard buffer and send it to the server if it's the player's turn
+                print("before")
                 if get_key_input and clients_turn and event.type == pygame.KEYDOWN:
+                    print("after")
                     if event.key == pygame.K_LEFT:
                         client_socket.send(idp.create_msg(f"move:LEFT"))
                     elif event.key == pygame.K_RIGHT:
@@ -187,10 +188,14 @@ def send_request():
     :parameter: Nothing
     :return: Nothing
     """
-    opponent = user_listbox.get(user_listbox.curselection())
     try:
-        client_socket.send(idp.create_msg(name))  # Send the name to the server
-        client_socket.send(idp.create_msg(f"request:{opponent}"))  # Send a game request to the server
+        user_selection = user_listbox.curselection()
+        if len(user_selection):
+            opponent = user_listbox.get(user_selection)
+            client_socket.send(idp.create_msg(name))  # Send the name to the server
+            client_socket.send(idp.create_msg(f"request:{opponent}"))  # Send a game request to the server
+        else:
+            messagebox.showinfo("Input Error", "Please select a player")
 
     except ConnectionRefusedError:
         messagebox.showinfo("Server Error", "Server is not running.")
@@ -263,6 +268,9 @@ def start_client():
 
                 # get back to the lobby after the game has ended
                 root.deiconify()
+            elif data.startswith("fail"):
+                _, reason = data.split(":")
+                messagebox.showinfo("Failed to connect", reason)
 
     except ConnectionRefusedError:
         messagebox.showinfo("Server Error", "Server is not running.")
@@ -275,7 +283,7 @@ def setup_music():
     :return: Nothing
     """
     # use partial functions to set up the music buttons
-    music_func = partial(play, "assets/Lounge Lizard.mp3")
+    music_func = partial(play, "assets/queens garden.mp3")
     play_button = Button(root, text="Play some music!", font=("Helvetica", 20), command=music_func)
     play_button.pack(pady=10)
 
@@ -318,8 +326,8 @@ if __name__ == "__main__":
     game_ended = False
 
     root = Tk()
-    width = 800
-    height = 600
+    width = SCREEN_WIDTH
+    height = SCREEN_HEIGHT
     root.geometry(f"{width}x{height}")
     root.title("Multiplayer Lobby")
     root.protocol("WM_DELETE_WINDOW", on_closing)
@@ -338,7 +346,7 @@ if __name__ == "__main__":
 
     # connect to the server
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect(('localhost', 12345))
+    client_socket.connect(('127.0.0.1', 12345))
 
     # Create the listbox to display connected users
     user_listbox = Listbox(root, selectmode=SINGLE)

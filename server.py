@@ -406,13 +406,23 @@ def handle_client(client_conn, addr):
                             save_client1 = client
                             break
 
+                    opponent_already_playing = False
                     opponent_conn = None
                     for client in clients:
                         if client[0] == requester:
                             opponent_conn = client[1]
-                            clients_in_game.append(client)
-                            save_client2 = client
+                            if client in clients_in_game:
+                                opponent_already_playing = True
+                                client_conn.send(idp.create_msg(f"fail:opponent in game"))
+                            else:
+                                clients_in_game.append(client)
+                                save_client2 = client
                             break
+
+                    # if the opponent entered a game with another player before this client accepted, don't start a game
+                    if opponent_already_playing:
+                        clients_in_game.remove(save_client1)
+                        continue
 
                     # check if the client who requested the game exited the lobby before the other client accepted
                     # the request, if so then don't enter a game
@@ -420,6 +430,7 @@ def handle_client(client_conn, addr):
                         clients_in_game.remove(save_client1)
                         if None in clients_in_game:
                             clients_in_game.remove(None)
+                        client_conn.send(idp.create_msg(f"fail:opponent left before response"))
                         continue
 
                     broadcast_clients()  # Notify all clients about new matches
