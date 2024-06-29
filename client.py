@@ -149,7 +149,7 @@ def handle_game():
     pygame.init()
     win = pygame.display.set_mode((GRID_WIDTH, GRID_HEIGHT))
     pygame.display.set_caption("Colorful Conquest")
-    play("assets/hornet.mp3")
+    play("assets/radiance.mp3")
 
     # start a thread that will receive game information from the server simultaneously to sending the player's moves
     threading.Thread(target=recv_game_information).start()
@@ -169,9 +169,7 @@ def handle_game():
                     break
 
                 # receive data from the keyboard buffer and send it to the server if it's the player's turn
-                print("before")
                 if get_key_input and clients_turn and event.type == pygame.KEYDOWN:
-                    print("after")
                     if event.key == pygame.K_LEFT:
                         client_socket.send(idp.create_msg(f"move:LEFT"))
                     elif event.key == pygame.K_RIGHT:
